@@ -1,84 +1,90 @@
-<html><head><base href=""><style>
-body {
-  font-family: Arial, sans-serif;
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 20px;
-}
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
 
-.container {
-  background-color: #f5f5f5;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
+    .container {
+      background-color: #f5f5f5;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
 
-.upload-section {
-  text-align: center;
-  padding: 20px;
-  border: 2px dashed #ccc;
-  border-radius: 8px;
-  margin-bottom: 20px;
-}
+    .upload-section {
+      text-align: center;
+      padding: 20px;
+      border: 2px dashed #ccc;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
 
-#results {
-  margin-top: 20px;
-}
+    #results {
+      margin-top: 20px;
+    }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 20px;
-}
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
 
-th, td {
-  border: 1px solid #ddd;
-  padding: 8px;
-  text-align: left;
-}
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
 
-th {
-  background-color: #4CAF50;
-  color: white;
-}
+    th {
+      background-color: #4CAF50;
+      color: white;
+    }
 
-.download-btn {
-  background-color: #4CAF50;
-  color: white;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-top: 20px;
-  margin-right: 10px;
-}
+    .download-btn {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
 
-.download-btn:hover {
-  background-color: #45a049;
-}
-</style></head>
+    .download-btn:hover {
+      background-color: #45a049;
+    }
+  </style>
+</head>
 <body>
   <div class="container">
     <h1>CSV Data Processor</h1>
     <div class="upload-section">
       <h2>Upload CSV File</h2>
       <p>File should contain timestamp, level, and temperature data<br>
-         Format: DD/MM/YYYY HH:mm,level,temperature</p>
+        Format: DD/MM/YYYY HH:mm,level,temperature</p>
       <input type="file" id="csvFile" accept=".csv">
     </div>
     <div id="results"></div>
   </div>
 
   <script>
+    let uploadedFileName = ''; // Variable para almacenar el nombre del archivo subido
+
     document.getElementById('csvFile').addEventListener('change', function(e) {
       const file = e.target.files[0];
+      uploadedFileName = file.name.split('.').slice(0, -1).join('.'); // Captura el nombre del archivo sin la extensión
       const reader = new FileReader();
-      
+
       reader.onload = function(event) {
         const csvData = event.target.result;
         processData(csvData);
       };
-      
+
       reader.readAsText(file);
     });
 
@@ -93,78 +99,56 @@ th {
         '9-10': 'Septiembre-Octubre',
         '11-12': 'Noviembre-Diciembre'
       };
-      
+
       try {
         const startIndex = lines[0].toLowerCase().includes('timestamp') ? 1 : 0;
-        
+
         for (let i = startIndex; i < lines.length; i++) {
           const line = lines[i];
           const [timestamp, level, temperature] = line.split(',').map(item => item.trim());
-          
-          if (!timestamp || !level || !temperature) {
-            console.log('Skipping invalid line:', line);
-            continue;
-          }
-          
+
+          if (!timestamp || !level || !temperature) continue;
+
           const [datePart] = timestamp.split(' ');
-          if (!datePart) {
-            console.log('Invalid date format in line:', line);
-            continue;
-          }
-          
+          if (!datePart) continue;
+
           const parts = datePart.split('/');
-          if (parts.length !== 3) {
-            console.log('Invalid date parts in line:', line);
-            continue;
-          }
-          
+          if (parts.length !== 3) continue;
+
           const [day, month, year] = parts;
-          
-          if (!day || !month || !year || 
-              isNaN(parseInt(day)) || 
-              isNaN(parseInt(month)) || 
-              isNaN(parseInt(year))) {
-            console.log('Invalid date numbers in line:', line);
-            continue;
-          }
-          
+
           const monthNum = parseInt(month);
-          // Skip invalid months
-          if (monthNum < 1 || monthNum > 12) {
-            console.log('Invalid month number:', monthNum);
-            continue;
-          }
-          
+          if (monthNum < 1 || monthNum > 12) continue;
+
           const yearNum = parseInt(year);
-          
-          // Calculate bimonthly period (1-2, 3-4, 5-6, 7-8, 9-10, 11-12)
-          const bimonthlyPeriod = `${Math.ceil(monthNum/2)*2-1}-${Math.ceil(monthNum/2)*2}`;
+
+          const bimonthlyPeriod = `${Math.ceil(monthNum / 2) * 2 - 1}-${Math.ceil(monthNum / 2) * 2}`;
           const periodKey = `${yearNum}-${bimonthlyPeriod}`;
-          
+
           if (!bimonthlyData[periodKey]) {
             bimonthlyData[periodKey] = {
               levels: [],
               temperatures: [],
               monthRange: monthNames[bimonthlyPeriod],
-              sortOrder: Math.ceil(monthNum/2) // Add sort order based on the month pair
+              sortOrder: Math.ceil(monthNum / 2)
             };
           }
-          
+
           const levelValue = parseFloat(level);
           const tempValue = parseFloat(temperature);
-          
+
           if (!isNaN(levelValue) && !isNaN(tempValue)) {
             bimonthlyData[periodKey].levels.push(levelValue);
             bimonthlyData[periodKey].temperatures.push(tempValue);
           }
         }
-        
+
         const processedData = [];
         for (const period in bimonthlyData) {
           if (bimonthlyData[period].levels.length > 0 && bimonthlyData[period].temperatures.length > 0) {
             const avgLevel = average(bimonthlyData[period].levels);
             const avgTemp = average(bimonthlyData[period].temperatures);
-            
+
             if (!isNaN(avgLevel) && !isNaN(avgTemp)) {
               processedData.push({
                 date: period,
@@ -176,62 +160,60 @@ th {
             }
           }
         }
-        
-        // Sort first by year, then by month period
+
         processedData.sort((a, b) => {
           const [yearA] = a.date.split('-');
           const [yearB] = b.date.split('-');
-          if (yearA !== yearB) {
-            return yearA.localeCompare(yearB);
-          }
+          if (yearA !== yearB) return yearA.localeCompare(yearB);
           return a.sortOrder - b.sortOrder;
         });
-        
+
         displayResults(processedData);
-        
       } catch (error) {
         document.getElementById('results').innerHTML = `<p style="color: red">Error processing file: ${error.message}</p>`;
         console.error('Processing error:', error);
       }
     }
-    
+
     function average(arr) {
       return arr.reduce((a, b) => a + b, 0) / arr.length;
     }
-    
+
     function displayResults(bimonthlyData) {
       let html = '<h3>Processed Data (Bimonthly Averages)</h3>';
       html += '<table><tr><th>Year-Period</th><th>Months</th><th>Average Level</th><th>Average Temperature</th></tr>';
-      
+
       bimonthlyData.forEach(row => {
         html += `<tr><td>${row.date}</td><td>${row.monthRange}</td><td>${row.level}</td><td>${row.temperature}</td></tr>`;
       });
-      
+
       html += '</table>';
       html += '<button class="download-btn" onclick="downloadCSV()">Download Bimonthly Averages</button>';
-      
+
       document.getElementById('results').innerHTML = html;
-      
+
       window.processedData = bimonthlyData;
     }
-    
+
     function downloadCSV() {
       const data = window.processedData;
       let csv = 'Year-Period,Months,Level,Temperature\n';
-      
+
       data.forEach(row => {
         csv += `${row.date},${row.monthRange},${row.level},${row.temperature}\n`;
       });
-      
+
       const blob = new Blob([csv], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.setAttribute('hidden', '');
       a.setAttribute('href', url);
-      a.setAttribute('download', 'bimonthly_averages.csv');
+      const filename = uploadedFileName + ".csv";
+      a.setAttribute('download', 'transformed_' + filename);
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
     }
   </script>
-</body></html>
+</body>
+</html>
