@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .container {
+      background-color: #f5f5f5;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+    }
+
+    .upload-section {
+      text-align: center;
+      padding: 20px;
+      border: 2px dashed #ccc;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    #results {
+      margin-top: 20px;
+    }
+
+    .download-btn {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+
+    .download-btn:hover {
+      background-color: #45a049;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Procesador de CSV</h1>
+
+    <!-- Sección para cargar archivo ZIP -->
+    <div class="upload-section">
+      <h2>Subir ZIP con Archivos CSV</h2>
+      <p>Sube un archivo .zip que contenga varios archivos CSV para procesarlos.</p>
+      <input type="file" id="zipFile" accept=".zip">
+    </div>
+
+    <!-- Sección para cargar archivo CSV individual -->
+    <div class="upload-section">
+      <h2>Subir Archivo CSV Individual</h2>
+      <p>Sube un archivo CSV para procesarlo individualmente.</p>
+      <input type="file" id="csvFile" accept=".csv">
+    </div>
+
+    <div id="results"></div>
+  </div>
+
+  <script>
+    // Procesar archivo ZIP
+    document.getElementById('zipFile').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const zip = new JSZip();
+      const resultsContainer = document.getElementById('results');
+      resultsContainer.innerHTML = 'Procesando archivo ZIP...';
+
+      zip.loadAsync(file).then(async function(contents) {
+        const processedFiles = new JSZip();
+        const csvPromises = [];
+
+        for (const filename in contents.files) {
+          if (filename.endsWith('.csv')) {
+            const fileData = contents.files[filename];
+            csvPromises.push(
+              fileData.async('string').then(csvContent => {
+                const processedCsv = processCsv(csvContent);
+                processedFiles.file('transformado_' + filename, processedCsv);
+              })
+            );
+          }
+        }
+
+        await Promise.all(csvPromises);
+
+        processedFiles.generateAsync({ type: 'blob' }).then(function(content) {
+          saveAs(content, 'archivos_transformados.zip');
+          resultsContainer.innerHTML = '¡Procesamiento del ZIP completado! Descarga el archivo ZIP procesado.';
+        });
+      }).catch(error => {
+        resultsContainer.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+        console.error('Error al cargar el archivo ZIP:', error);
+      });
+    });
+
+    // Procesar archivo CSV individual
+    document.getElementById('csvFile').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      const resultsContainer = document.getElementById('results');
+      resultsContainer.innerHTML = 'Procesando archivo CSV...';
+
+      reader.onload = function(event) {
+        const csvContent = event.target.result;
+        const processedCsv = processCsv(csvContent);
+        const blob = new Blob([processedCsv], { type: 'text/csv;charset=utf-8;' });
+        saveAs(blob, 'transformado_' + file.name);
+        resultsContainer.innerHTML = '¡Procesamiento del archivo CSV completado! Descarga el archivo procesado.';
+      };
+
+      reader.onerror = function(error) {
+        resultsContainer.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+        console.error('Error al leer el archivo CSV:', error);
+      };
+
+      reader.readAsText(file);
+    });
+
+    function processCsv(csv) {
+      const lines = csv.split('\n').filter(line => line.trim());
+      const bimonthlyData = {};
+      const monthNames = {
+        '1-2': 'Enero-Febrero',
+        '3-4': 'Marzo-Abril',
+        '5-6': 'Mayo-Junio',
+        '7-8': 'Julio-Agosto',
+        '9-10': 'Septiembre-Octubre',
+        '11-12': 'Noviembre-Diciembre'
+      };
+
+      try {
+        const startIndex = lines[0].toLowerCase().includes('timestamp') ? 1 : 0;
+
+        for (let i = startIndex; i < lines.length; i++) {
+          const line = lines[i];
+          const [timestamp, level, temperature] = line.split(',').map(item => item.trim());
+
+          if (!timestamp || !level || !temperature) continue;
+
+          const [datePart] = timestamp.split(' ');
+          if (!datePart) continue;
+
+          const parts = datePart.split('/');
+          if (parts.length !== 3) continue;
+
+          const [day, month, year] = parts;
+
+          const monthNum = parseInt(month);
+          if (monthNum < 1 || monthNum > 12) continue;
+
+          const yearNum = parseInt(year);
+
+          const bimonthlyPeriod = `${Math.ceil(monthNum / 2) * 2 - 1}-${Math.ceil(monthNum / 2) * 2}`;
+          const periodKey = `${yearNum}-${bimonthlyPeriod}`;
+
+          if (!bimonthlyData[periodKey]) {
+            bimonthlyData[periodKey] = {
+              levels: [],
+              temperatures: [],
+              monthRange: monthNames[bimonthlyPeriod],
+              sortOrder: Math.ceil(monthNum / 2)
+            };
+          }
+
+          const levelValue = parseFloat(level);
+          const tempValue = parseFloat(temperature);
+
+          if (!isNaN(levelValue) && !isNaN(tempValue)) {
+            bimonthlyData[periodKey].levels.push(levelValue);
+            bimonthlyData[periodKey].temperatures.push(tempValue);
+          }
+        }
+
+        const processedData = [];
+        for (const period in bimonthlyData) {
+          if (bimonthlyData[period].levels.length > 0 && bimonthlyData[period].temperatures.length > 0) {
+            const avgLevel = average(bimonthlyData[period].levels);
+            const avgTemp = average(bimonthlyData[period].temperatures);
+
+            if (!isNaN(avgLevel) && !isNaN(avgTemp)) {
+              processedData.push({
+                date: period,
+                monthRange: bimonthlyData[period].monthRange,
+                level: avgLevel.toFixed(3),
+                temperature: avgTemp.toFixed(3),
+                sortOrder: bimonthlyData[period].sortOrder
+              });
+            }
+          }
+        }
+
+        processedData.sort((a, b) => {
+          const [yearA] = a.date.split('-');
+          const [yearB] = b.date.split('-');
+          if (yearA !== yearB) return yearA.localeCompare(yearB);
+          return a.sortOrder - b.sortOrder;
+        });
+
+        let csvOutput = 'Año-Periodo,Meses,Nivel,Temperatura\n';
+        processedData.forEach(row => {
+          csvOutput += `${row.date},${row.monthRange},${row.level},${row.temperature}\n`;
+        });
+
+        return csvOutput;
+      } catch (error) {
+        console.error('Error al procesar CSV:', error);
+        return 'Error al procesar el archivo CSV.';
+      }
+    }
+
+    function average(arr) {
+      return arr.reduce((a, b) => a + b, 0) / arr.length;
+    }
+  </script>
+</body>
+</html>
+
